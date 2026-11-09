@@ -1,209 +1,590 @@
 # Peloton Subscription Churn Analysis
 
-**A Python EDA + SQL business analytics project**
+**Python EDA + PostgreSQL business analytics project focused on understanding customer churn and identifying actionable retention opportunities.**
 
-[![Python](https://img.shields.io/badge/Python-3.9%2B-blue)](https://python.org)
-[![SQL](https://img.shields.io/badge/SQL-PostgreSQL-336791)](https://postgresql.org)
-[![Analysis](https://img.shields.io/badge/Type-EDA%20%2B%20Business%20Analysis-green)]()
+[![Python](https://img.shields.io/badge/Python-3.9%2B-blue)](https://www.python.org/) [![SQL](https://img.shields.io/badge/SQL-PostgreSQL-336791)](https://www.postgresql.org/) [![Analysis](https://img.shields.io/badge/Analysis-EDA%20%2B%20Business%20Analytics-green)]() [![Dataset](https://img.shields.io/badge/Dataset-4%2C200%20Customers-orange)]()
 
 ---
 
-## Business Problem
+## 📌 Project Overview
 
-Peloton's fitness app offers on-demand workouts and live classes via monthly and annual subscriptions. Subscription cancellations are increasing, and leadership wants to understand why subscribers are leaving and what actions can improve retention.
+Customer churn is one of the most important retention challenges for subscription businesses. This project analyzes **4,200 Peloton subscribers across July 2024–December 2025** to understand which customer characteristics, subscription attributes, and engagement behaviors are associated with churn.
 
-> **Central question:** What customer characteristics, subscription attributes, engagement patterns, and behavioural factors are associated with subscription churn — and what evidence-based actions should Peloton prioritise to improve retention?
+The analysis combines:
 
----
+- Python-based exploratory data analysis
+- PostgreSQL business analytics
+- Statistical hypothesis testing
+- Tenure-aware churn analysis
+- Right-censoring controls
+- First-month engagement analysis
+- Cancellation-reason validation
+- Business-focused recommendations
 
-## Objective
-
-This project performs a **structured exploratory data analysis** of 4,200 Peloton subscribers across 18 months to:
-
-1. Identify and validate the **top 3 factors associated with churn**
-2. Control for **right-censoring and tenure** throughout the analysis
-3. Cross-validate findings against **stated cancellation reasons**
-4. Translate evidence into **specific, measurable retention recommendations**
-
-This is intentionally an **EDA and business analysis project** — no machine learning models are built.
+> **Important:** This is an observational analysis. The findings identify associations, not causal relationships.
 
 ---
 
-## Dataset
+## 🎯 Business Problem
 
-Two CSV files are analysed (not committed — see `data/README.md` for placement instructions):
+Peloton subscribers can cancel under different subscription plans and may exhibit very different engagement patterns before churn.
 
-| File | Rows | Grain | Key fields |
+The central business question is:
+
+> **What customer characteristics, subscription attributes, engagement patterns, and behavioral factors are associated with subscription churn — and what evidence-based actions should Peloton prioritize to improve retention?**
+
+The project specifically investigates:
+
+1. Which factors are most strongly associated with churn?
+2. How does churn vary by subscription plan and customer segment?
+3. Does engagement behavior provide an early warning signal?
+4. Are promotional customers more likely to churn?
+5. When are annual subscribers most vulnerable?
+6. Do stated cancellation reasons align with observed customer behavior?
+7. What retention actions can be derived from the evidence?
+
+---
+
+## 📊 Dataset
+
+The project uses two datasets provided for the analysis.
+
+| Dataset | Rows | Grain | Description |
+|---|---:|---|---|
+| `subscriptions.csv` | 4,200 | One row per customer | Subscription, demographic, acquisition and churn information |
+| `usage.csv` | 30,685 raw | One row per customer per month | Workout, activity, class and support behavior |
+
+After removing **160 exact duplicate customer-month usage records**, the analytical usage dataset contains **30,525 records**.
+
+### Key subscription fields
+
+- `customer_id`
+- `signup_date`
+- `plan_type`
+- `plan_tier`
+- `monthly_price`
+- `acquisition_channel`
+- `primary_device`
+- `age_group`
+- `churned`
+- `churn_date`
+- `cancel_reason`
+
+### Key usage fields
+
+- `customer_id`
+- `month`
+- `workouts_completed`
+- `minutes_active`
+- `classes_booked`
+- `support_tickets`
+
+The datasets are included directly in the repository under:
+
+```text
+data/
+├── subscriptions.csv
+└── usage.csv
+```
+
+This allows the project to be reproduced from the repository without requiring separate dataset placement.
+
+---
+
+## 🧹 Data Quality & Preparation
+
+Several data-quality issues were identified and handled explicitly:
+
+| Issue | Treatment |
+|---|---|
+| 160 duplicate usage customer-month records | Removed |
+| 101 `plan_tier` capitalization inconsistencies | Normalized to lowercase |
+| 506 missing `minutes_active` values | Excluded from minutes-specific analysis; not imputed |
+| 382 churned customers with missing cancellation reasons | Recoded as `unknown` and reported separately |
+| 7 zero-tenure customers | Retained and flagged |
+
+The cleaned analytical dataset contains:
+
+- **4,200 customers**
+- **1,768 churned customers**
+- **2,432 active/right-censored customers**
+- **30,525 cleaned monthly usage records**
+- **42.1% observed cumulative churn rate**
+
+---
+
+## 🔬 Analytical Methodology
+
+### 1. Churn Definition
+
+A customer is classified as churned when:
+
+```text
+churned == 'yes'
+```
+
+Active customers are treated as **right-censored at December 31, 2025** rather than being treated as successfully retained.
+
+This distinction is important because active customers may churn after the observation period.
+
+### 2. Tenure Analysis
+
+Customer tenure is measured in completed **30-day months**.
+
+Five tenure bands are used:
+
+- 0–1 months
+- 2–3 months
+- 4–6 months
+- 7–12 months
+- 13+ months
+
+Major churn drivers are re-evaluated within tenure bands to determine whether relationships remain consistent.
+
+### 3. Monthly Churn Rate
+
+Monthly churn is calculated as:
+
+```text
+Cancellations in month M
+──────────────────────────────
+Customers active at start of month M
+```
+
+Same-month signups are excluded from the denominator to avoid artificially inflating monthly churn.
+
+### 4. Engagement Analysis
+
+Customer-level **per-month averages** are used instead of lifetime totals.
+
+This avoids giving customers with longer observation periods an artificial advantage and allows fair comparison between churned and active customers.
+
+Post-churn usage is explicitly excluded to prevent data leakage.
+
+### 5. Statistical Testing
+
+The project uses **12 pre-specified statistical tests**, including:
+
+- Chi-square tests for categorical variables
+- Mann-Whitney U tests for continuous variables
+- Cramér's V
+- Rank-biserial correlation
+- Benjamini-Hochberg FDR correction at `q = 0.10`
+
+Statistical significance is considered alongside:
+
+- Effect size
+- Tenure consistency
+- Practical magnitude
+- Business relevance
+
+---
+
+# 📈 Key Findings
+
+## 1. Low Engagement is the Strongest Behavioral Predictor
+
+Churned subscribers completed a median of:
+
+**2.0 workouts/month**
+
+compared with:
+
+**4.1 workouts/month**
+
+for active subscribers.
+
+The engagement relationship was statistically strong:
+
+- Rank-biserial correlation: **r = −0.37**
+- p ≈ 0 after BH adjustment
+- Consistent across tenure bands
+- Churned subscribers were **twice as likely to complete zero workouts during their first month**
+
+### Engagement distribution
+
+![Engagement distributions — churned vs active](reports/chart06_engagement_distributions.png)
+
+Churned customers show substantially lower engagement across the observed usage measures.
+
+### First-month engagement
+
+First-month zero-workout rate:
+
+| Customer group | Zero workouts in month 1 |
+|---|---:|
+| Churned | **12.9%** |
+| Active | **6.5%** |
+
+![First-month engagement](reports/chart07_first_month_engagement.png)
+
+The first month provides an important early-warning opportunity: customers who fail to establish an initial workout habit are disproportionately represented among churners.
+
+The behavioral evidence is also consistent with the stated cancellation reason **“not using enough,”** which represented 41.1% of churners with known reasons.
+
+### Engagement across tenure
+
+![Engagement by tenure](reports/chart10_engagement_by_tenure.png)
+
+The engagement gap remains visible across tenure bands, supporting the conclusion that low engagement is not isolated to a single stage of the customer lifecycle.
+
+**Business implication:** The strongest retention opportunity is early habit formation and activation.
+
+---
+
+## 2. Monthly Billing Creates Persistent Cancellation Risk
+
+Monthly subscribers churned at:
+
+**51.2%**
+
+compared with:
+
+**26.4%**
+
+for annual subscribers.
+
+That's a **24.8 percentage-point difference**.
+
+![Churn by subscription characteristics](reports/chart05_churn_by_subscription_chars.png)
+
+The relationship remained meaningful after tenure-stratified validation.
+
+Annual subscribers face a different risk pattern: **75.9% of annual churners fall within a 10–14 month window**, consistent with an annual renewal decision point.
+
+![Churn by tenure band](reports/chart04_churn_by_tenure_band.png)
+
+The monthly churn pattern over the observation period also shows how cancellation risk evolves over time:
+
+![Monthly churn trend](reports/chart01_monthly_churn_trend.png)
+
+### Tenure-stratified validation
+
+![Tenure-stratified plan and channel analysis](reports/chart09_tenure_stratified_plan_channel.png)
+
+These results reinforce that the relationship between subscription structure and churn should be interpreted alongside customer tenure rather than as a single overall comparison.
+
+**Business implication:** Monthly subscribers need conversion/commitment interventions, while annual subscribers need targeted renewal interventions.
+
+---
+
+## 3. Promo-Acquired Subscribers are an Early-Churn Segment
+
+Subscribers acquired through promotional offers churned at:
+
+**50.8%**
+
+compared with:
+
+**39.6%**
+
+for other acquisition channels.
+
+Within monthly subscribers, the gap widened to:
+
+**63.3% vs 47.7%**
+
+![Churn by subscription characteristics](reports/chart05_churn_by_subscription_chars.png)
+
+The effect is concentrated in early tenure. Promo churn is highest in the **2–3 month period** and declines substantially afterward.
+
+The tenure-stratified analysis provides additional context:
+
+![Tenure-stratified plan and channel analysis](reports/chart09_tenure_stratified_plan_channel.png)
+
+This pattern suggests that promotional acquisition should not automatically be interpreted as a permanently high-risk customer characteristic. The stronger signal is concentrated around early customer tenure.
+
+**Business implication:** The issue appears more consistent with an early onboarding/activation problem than a permanently higher-risk customer segment.
+
+---
+
+## 4. “Too Expensive” Churners are Engaged Users
+
+Customers citing **“too expensive”** as their cancellation reason averaged:
+
+**3.67 workouts/month**
+
+compared with:
+
+**2.12 workouts/month**
+
+among customers citing **“not using enough.”**
+
+This is an important behavioral distinction.
+
+These customers are relatively engaged but appear to be making a **price-value judgment**.
+
+### Cancellation reasons
+
+![Cancellation reasons](reports/chart12_cancellation_reasons.png)
+
+The cancellation-reason distribution provides additional context for distinguishing engagement-driven churn from price- or value-driven churn.
+
+**Business implication:** Re-engagement campaigns are unlikely to address this segment effectively. Pricing, plan structure, loyalty pricing, or annual-plan offers are more appropriate retention levers.
+
+---
+
+# 🏆 Top 3 Churn Drivers
+
+![Top 3 churn factors](reports/chart11_top3_factors.png)
+
+| Rank | Driver | Evidence | Tenure Pattern |
 |---|---|---|---|
-| `subscriptions.csv` | 4,200 | One per customer | signup_date, plan_type, plan_tier, acquisition_channel, churned, churn_date, cancel_reason |
-| `usage.csv` | 30,685 (raw) | One per customer per month | workouts_completed, minutes_active, classes_booked, support_tickets |
+| 1 | **Low engagement** | 2.0 vs 4.1 median workouts/month; r = −0.37 | Persistent across all tenure bands |
+| 2 | **Monthly plan** | 51.2% vs 26.4% churn; V = 0.24 | Persistent, but mechanism changes by tenure |
+| 3 | **Promo acquisition** | 50.8% vs 39.6%; V = 0.107 | Concentrated in early tenure |
 
-**Key data quality issues found and resolved:**
-- 160 exact duplicate usage rows — dropped (data export artifact)
-- 101 `plan_tier` capitalisation inconsistencies — normalised to lowercase
-- 506 missing `minutes_active` values — excluded from minutes-specific analyses; not imputed
-- 382 churned customers with no stated cancel reason — recoded as `"unknown"` and reported separately
+Not every customer attribute is a meaningful churn driver.
 
----
+For example:
 
-## Analytical Approach
+- Plan tier showed little meaningful differentiation
+- Age group showed little meaningful differentiation
+- Primary device showed only a weak relationship requiring further study
 
-### Churn Definition
-A customer is churned if `churned == 'yes'`. Active customers are **right-censored** at the analysis cutoff (2025-12-31) — they are not treated as "successfully retained."
-
-### Tenure
-Tenure is measured in **completed 30-day months** (a documented approximation of billing months). Active customers' tenure runs to the analysis cutoff. Five tenure bands are used: 0–1, 2–3, 4–6, 7–12, and 13+ months.
-
-### Monthly Churn Rate
-Calculated as `cancellations in month M ÷ customers active at start of month M`. Same-month signups are excluded from the denominator to avoid inflating churn rates in high-growth months.
-
-### Engagement Analysis
-Customer-level **per-month averages** are used throughout — not lifetime totals — to ensure fair comparison between churned customers (shorter observation windows) and active customers (ongoing observation).
-
-### Statistical Testing
-12 pre-specified tests (Chi-square for categorical variables; Mann-Whitney U for continuous) with **Benjamini-Hochberg FDR correction at q = 0.10**. Effect sizes reported alongside p-values. Statistical significance is supporting evidence; practical magnitude, tenure consistency, and business relevance jointly determine the Top 3 factors.
-
-### Leakage Prevention
-Explicit filters exclude post-churn usage from all aggregations. Per-month averages rather than cumulative totals remove observation-window bias. The churn date is used only for tenure calculation and usage filtering — never as a predictor variable.
-
-### Tenure-Stratified Validation
-Every major candidate factor is re-examined within each tenure band. Cells with n < 30 are flagged and not interpreted.
+This helps focus retention strategy on the factors with stronger evidence rather than treating every customer characteristic as equally important.
 
 ---
 
-## Key Findings
+# 💡 Business Recommendations
 
-> All findings are **associative, not causal**.
+## 1. First-30-Day Activation Programme
 
-### Finding 1 — Low Engagement is the Strongest Behavioural Predictor
-Churned subscribers completed a median of **2.0 workouts per month** vs **4.1** for active subscribers (rank-biserial r = −0.37, p ≈ 0, BH-adjusted). The gap is present from month 1 and consistent across all tenure bands. Churned subscribers were **twice as likely to complete zero workouts in their first month** (12.9% vs 6.5%). The stated cancellation reason "not using enough" (41% of known reasons) independently corroborates the behavioural data.
+**Target:** All new subscribers, with elevated intensity for promo-acquired customers.
 
-### Finding 2 — Monthly Billing Creates Persistent Cancellation Risk
-Monthly plan subscribers churn at **51.2% vs 26.4%** for annual (Δ = 24.8pp; V = 0.24, p ≈ 0). This gap persists within tenure bands. A distinct mechanism applies to annual subscribers: **75.9% of annual churners cancel in a 10–14 month window**, consistent with the annual renewal decision point — a separate retention risk requiring a separate intervention.
+Suggested intervention sequence:
 
-### Finding 3 — Promo-Acquired Subscribers are an Early-Churn Segment
-Promo-offer subscribers churn at **50.8% vs 39.6%** for other channels (Δ = 11.2pp; V = 0.107, p ≈ 0). Within monthly plans, the gap is 15.6pp (63.3% vs 47.7%). The effect is **early-tenure concentrated**: promo churn peaks in the 2–3 month band and falls below other channels by months 4–6, suggesting an onboarding problem rather than an intrinsic customer quality difference.
+- **Day 3:** Personalized class recommendation
+- **Day 7:** Prompt customers with zero workouts
+- **Day 14:** Introduce a four-week streak mechanic
+- **Day 30:** Check-in for subscribers with fewer than four workouts
 
-### Finding 4 — "Too Expensive" Churners are Engaged Users (Behavioural Contradiction)
-Customers who stated "too expensive" averaged **3.67 workouts/month** — higher than those who stated "not using enough" (2.12). They are engaged users making a price-value judgement. Re-engagement campaigns will not retain this segment; a price or commitment-structure offer is the appropriate lever.
+**Why:** Churned customers were twice as likely to complete zero workouts in their first month.
 
 ---
 
-## Business Recommendations
+## 2. Monthly-to-Annual Upgrade Offer at Month 2–3
 
-| Action | Target segment | Rationale |
+**Target:** Monthly subscribers who demonstrate initial engagement.
+
+The objective is to convert a continuous monthly cancellation risk into an annual commitment decision.
+
+The analysis identifies months 2–3 as an important intervention window for monthly subscribers.
+
+---
+
+## 3. Annual Renewal Intervention at Month 10–11
+
+**Target:** Annual subscribers approaching renewal with declining engagement.
+
+Suggested approach:
+
+- Month 10: Personalized year-in-review
+- Month 11: Renewal reminder
+- Loyalty incentive or temporary tier benefit
+- Email + in-app renewal messaging
+
+**Why:** 75.9% of annual churners fall within the 10–14 month window.
+
+---
+
+## 4. Price-Sensitive Segment Retention Offer
+
+**Target:** Engaged monthly subscribers showing price sensitivity.
+
+Potential levers:
+
+- Annual-plan discount
+- One-month-free retention offer
+- Tier downgrade option
+- Loyalty pricing
+
+**Why:** “Too expensive” churners are relatively engaged, averaging 3.67 workouts/month.
+
+---
+
+# 📏 Measurement Plan
+
+Recommendations should be validated experimentally before being scaled.
+
+| Action | Primary KPI | Measurement |
 |---|---|---|
-| **First-30-Day Activation Programme** | All new subscribers; elevated for promo-acquired | First-month engagement gap is the earliest observable churn signal |
-| **Monthly-to-Annual Upgrade Offer (Month 2–3)** | Monthly subscribers with ≥ 2 first-month workouts | Converts continuous cancellation risk to an annual decision |
-| **Annual Renewal Intervention (Month 10–11)** | Annual subscribers with declining engagement in months 8–10 | 75.9% of annual churners fall in a 10–14 month window |
-| **Price-Sensitive Segment Offer** | Engaged monthly subscribers (≥ 2 workouts/month) on basic/plus tier | "Too expensive" churners are engaged — the right lever is pricing, not re-engagement |
+| Activation programme | First-month workout completion | A/B test |
+| Upgrade offer | Monthly-to-annual conversion + 90-day churn | Holdout experiment |
+| Renewal intervention | Annual renewal rate | Matched control / pre-post |
+| Price-sensitive offer | Segment churn + LTV impact | A/B test |
 
-Full recommendation (one page): [`reports/recommendation.md`](reports/recommendation.md)
+The analysis does **not** prescribe arbitrary percentage improvement targets because the underlying data is observational.
+
+The next step is controlled experimentation.
 
 ---
 
-## Tools
+# 🛠️ Tech Stack
 
 | Tool | Purpose |
 |---|---|
-| Python 3.9+ | Primary analysis environment |
-| pandas | Data loading, cleaning, and manipulation |
-| NumPy | Numerical computation |
-| Matplotlib + Seaborn | Visualisation (14 analytical charts) |
-| SciPy | Mann-Whitney U and Chi-square statistical tests |
-| statsmodels | Benjamini-Hochberg FDR multiple-testing correction |
-| PostgreSQL | SQL validation and supporting analysis |
-| Git / GitHub | Version control and portfolio presentation |
+| **Python 3.9+** | Primary analysis environment |
+| **Pandas** | Data cleaning and manipulation |
+| **NumPy** | Numerical computation |
+| **Matplotlib + Seaborn** | Data visualization |
+| **SciPy** | Statistical hypothesis testing |
+| **Statsmodels** | Multiple-testing correction |
+| **PostgreSQL** | SQL validation and business analysis |
+| **Jupyter Notebook** | Reproducible analytical workflow |
+| **Git / GitHub** | Version control and portfolio presentation |
 
 ---
 
-## Project Structure
+# 📁 Project Structure
 
-```
+```text
 peloton-subscription-churn-analysis/
 │
 ├── data/
-│   └── README.md                          ← Dataset placement instructions
+│   ├── subscriptions.csv
+│   └── usage.csv
 │
 ├── notebooks/
-│   └── peloton_subscription_churn_eda.ipynb  ← Full 20-section analysis notebook
+│   └── peloton_subscription_churn_eda.ipynb
 │
 ├── sql/
-│   ├── 01_data_quality.sql               ← Data quality audit queries
-│   ├── 02_churn_definition.sql           ← Churn definition + monthly churn rate
-│   ├── 03_tenure_analysis.sql            ← Tenure distribution + right-censoring
-│   ├── 04_customer_segmentation.sql      ← Churn rates by all categorical dimensions
-│   ├── 05_usage_engagement.sql           ← Engagement aggregations + comparison
-│   ├── 06_first_month_analysis.sql       ← First-month behaviour analysis
-│   ├── 07_churn_driver_validation.sql    ← Tenure-stratified top-3 validation
-│   └── 08_final_validation.sql           ← Cross-validation of Python results
+│   ├── 01_data_quality.sql
+│   ├── 02_churn_definition.sql
+│   ├── 03_tenure_analysis.sql
+│   ├── 04_customer_segmentation.sql
+│   ├── 05_usage_engagement.sql
+│   ├── 06_first_month_analysis.sql
+│   ├── 07_churn_driver_validation.sql
+│   └── 08_final_validation.sql
 │
 ├── reports/
-│   ├── findings.md                       ← Structured business insights (4 findings)
-│   ├── recommendation.md                 ← One-page executive recommendation
-│   └── chart01–chart12.png               ← Saved visualisations from notebook
+│   ├── findings.md
+│   ├── recommendation.md
+│   ├── chart01_monthly_churn_trend.png
+│   ├── chart02_cohort_distribution.png
+│   ├── chart03_tenure_distribution.png
+│   ├── chart04_churn_by_tenure_band.png
+│   ├── chart05_churn_by_subscription_chars.png
+│   ├── chart06_engagement_distributions.png
+│   ├── chart07_first_month_engagement.png
+│   ├── chart08_pre_churn_trajectory.png
+│   ├── chart09_tenure_stratified_plan_channel.png
+│   ├── chart10_engagement_by_tenure.png
+│   ├── chart11_top3_factors.png
+│   └── chart12_cancellation_reasons.png
 │
-├── README.md                             ← This file
-├── requirements.txt                      ← Python dependencies
+├── README.md
+├── requirements.txt
 └── .gitignore
 ```
 
 ---
 
-## Reproducibility
+# ▶️ Reproducibility
 
-### Python
+## Python
+
+Clone the repository:
 
 ```bash
-# 1. Clone the repository
-git clone https://github.com/<your-username>/peloton-subscription-churn-analysis.git
+git clone git@github.com:NaveenKumar1822/peloton-subscription-churn-analysis.git
 cd peloton-subscription-churn-analysis
+```
 
-# 2. Install dependencies
+Create and activate a virtual environment:
+
+```bash
+python -m venv .venv
+```
+
+Install dependencies:
+
+```bash
 pip install -r requirements.txt
+```
 
-# 3. Place the datasets in the data/ directory
-#    (see data/README.md for instructions)
+Run the notebook:
 
-# 4. Run the notebook
+```bash
 jupyter notebook notebooks/peloton_subscription_churn_eda.ipynb
-# Execute all cells top-to-bottom (Kernel → Restart & Run All)
 ```
 
-The notebook reads from `../data/` relative to the notebooks directory. No absolute paths are used.
+Execute the notebook from top to bottom.
 
-### SQL (PostgreSQL)
+The notebook reads the datasets from:
 
-```sql
--- 1. Create schema and load raw tables (see data/README.md for COPY commands)
--- 2. Run scripts in order
-\i sql/01_data_quality.sql
-\i sql/02_churn_definition.sql
-\i sql/03_tenure_analysis.sql
-\i sql/04_customer_segmentation.sql
-\i sql/05_usage_engagement.sql
-\i sql/06_first_month_analysis.sql
-\i sql/07_churn_driver_validation.sql
-\i sql/08_final_validation.sql
--- Script 08 includes a PASS/FAIL cross-validation against notebook results
+```text
+data/
 ```
+
+using project-relative paths.
 
 ---
 
-## Limitations
+## PostgreSQL
 
-1. **Observational data — no causality.** All findings are associations. No randomised experiment exists.
-2. **Right-censoring.** 2,432 active customers have not yet churned in this dataset; true eventual churn exceeds 42.1%.
-3. **Monthly usage granularity.** Within-month engagement variation (consistency, timing) is not observable.
-4. **Missing cancel reasons.** 21.6% of churners provided no reason; the stated-reason distribution reflects 78.4% of churners.
-5. **Annual plan semantics.** The data does not distinguish mid-period cancellations from renewal lapses for annual subscribers.
-6. **No session-level or content-type data.** Workout type, duration per session, and time-of-day patterns are not available.
+Create a PostgreSQL database and schema, load the two datasets into the required tables, and execute the SQL scripts sequentially:
+
+```text
+01_data_quality.sql
+02_churn_definition.sql
+03_tenure_analysis.sql
+04_customer_segmentation.sql
+05_usage_engagement.sql
+06_first_month_analysis.sql
+07_churn_driver_validation.sql
+08_final_validation.sql
+```
+
+The final validation script cross-checks key outputs from the Python analysis against PostgreSQL results.
 
 ---
 
-## About This Project
+# ⚠️ Limitations
 
-This project was built as part of a Data Analyst portfolio, following the [Data Career School customer churn project specification](https://www.datacareerschool.com/datalabs/customer-churn-analysis). The analytical framework, churn methodology, tenure-adjustment approach, and business recommendations were developed from scratch using the actual datasets.
+### 1. Observational data
 
-**Author:** Naveen Kumar K  
-**Skills demonstrated:** EDA · SQL · Statistical testing · Business analysis · Tenure-aware analysis · Data storytelling
+The analysis identifies associations rather than causal relationships. Experimental validation is required before attributing retention improvements to specific interventions.
+
+### 2. Right-censoring
+
+**2,432 active customers** have not churned within the observation period. Their eventual churn status is unknown, meaning the true eventual churn rate may be higher than 42.1%.
+
+### 3. Monthly usage granularity
+
+The dataset does not capture session-level behavior, workout timing, consistency within a month, or content type.
+
+### 4. Missing cancellation reasons
+
+**21.6% of churned customers** have no stated cancellation reason. Reason-based analysis therefore represents only customers with known reasons.
+
+### 5. Annual plan semantics
+
+The dataset does not distinguish all possible forms of annual cancellation, such as mid-period cancellation versus renewal lapse.
+
+---
+
+# 📄 Detailed Reports
+
+For deeper analysis:
+
+- [`reports/findings.md`](reports/findings.md) — Detailed evidence behind the key findings
+- [`reports/recommendation.md`](reports/recommendation.md) — Executive retention recommendation
+- [`notebooks/peloton_subscription_churn_eda.ipynb`](notebooks/peloton_subscription_churn_eda.ipynb) — Full analytical workflow
+
+---
+
+# 👤 Author
+
+**Naveen K**
+
+Data Analyst portfolio project demonstrating:
+
+**EDA · SQL · Statistical Testing · Business Analysis · Tenure-Aware Analysis · Data Storytelling**
+
+[LinkedIn](https://www.linkedin.com/in/naveen840/) · [GitHub](https://github.com/NaveenKumar1822)
+
+---
+
+> **Project takeaway:** The strongest retention opportunity is not simply identifying *who* churns. It is identifying **when engagement breaks down, how subscription structure changes cancellation risk, and which intervention matches the customer's actual reason for leaving.**
