@@ -1,8 +1,3 @@
-# ── Data files (do not commit — see data/README.md) ─────────
-data/*.csv
-data/*.xlsx
-data/*.json
-
 # ── Python ───────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
@@ -23,32 +18,3 @@ var/
 wheels/
 *.so
 .installed.cfg
-
-# ── Jupyter ──────────────────────────────────────────────────
-.ipynb_checkpoints/
-*.ipynb~
-
-# ── Virtual environments ──────────────────────────────────────
-env/
-venv/
-.venv/
-ENV/
-.env
-
-# ── OS / editor ───────────────────────────────────────────────
-.DS_Store
-.DS_Store?
-Thumbs.db
-.idea/
-.vscode/
-*.swp
-*.swo
-
-# ── Reports (chart images — reproducible; optionally exclude) ─
-# Uncomment the following if you prefer not to commit PNG outputs:
-# reports/*.png
-
-# ── PostgreSQL local files ────────────────────────────────────
-*.sql.gz
-*.dump
-*.backup
